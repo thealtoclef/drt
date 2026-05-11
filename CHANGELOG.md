@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in anonymous usage telemetry** (#263): a new `drt/telemetry.py` module sends a single anonymous `sync_completed` event per `drt run` when the user explicitly opts in. Off by default. Honors `DO_NOT_TRACK=1`. Allow-list `properties` (`drt_version`, `python_version`, `os`, `source_type`, `destination_type`, `sync_mode`, `rows_synced`, `duration_seconds`, `status`) — never sends sync names, model SQL, destination URLs, credentials, or project paths. The wire envelope additionally carries `event`, `distinct_id`, `timestamp`, and `api_key`. Configure via `drt config set telemetry.enabled true` or `DRT_TELEMETRY=1`. Inspect what would be sent with `drt config show-telemetry`. Endpoint defaults to PostHog Cloud (EU region); override with `DRT_TELEMETRY_ENDPOINT` and `DRT_TELEMETRY_API_KEY` for self-hosted PostHog.
 - **Deprecation warnings in `drt validate`** (#478, closes #467): The `validate` command now reads `drt/deprecations.py` and surfaces ⚠️ warnings for any deprecated config keys it finds in your sync YAMLs — both in text output and as a per-sync `deprecations` array under `--output json`. Exit code stays `0` (warnings are non-blocking). The registry is currently empty (no active deprecations); add entries to `DEPRECATED_SYNC_KEYS` when announcing a new deprecation per VERSIONING.md Step 1. Migration guides live under `docs/migration/`. Closes the Step 2 ("Add Tooling Support") TODO from #457.
 
 ## [0.7.0] - 2026-05-06
