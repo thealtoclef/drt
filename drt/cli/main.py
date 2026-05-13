@@ -732,6 +732,9 @@ def validate(
     emit_schema: bool = typer.Option(  # noqa: E501
         False, "--emit-schema", help="Write JSON Schemas to .drt/schemas/."
     ),
+    check_connection: bool = typer.Option(
+        False, "--check-connection", help="Test connectivity to SQL destinations."
+    ),
     output: str = typer.Option("text", "--output", "-o", help="Output format: text or json."),
 ) -> None:
     """Validate sync definitions against the JSON Schema."""
@@ -755,22 +758,23 @@ def validate(
         for sync_name, sync_deprecations in result.deprecations.items():
             all_deprecations.extend(sync_deprecations)
         
+        results_json = []
+        for s in result.syncs:
+            entry = {
+                "name": s.name,
+                "valid": True,
+                "deprecations": result.deprecations.get(s.name, []),
+            }
+            if check_connection:
+                entry["connection_test"] = _run_connection_test(s)
+            results_json.append(entry)
+        
+        for name, errs in result.errors.items():
+            results_json.append({"name": name, "valid": False, "errors": errs})
+
         print(
             json.dumps(
-                {
-                    "results": [
-                        {
-                            "name": s.name,
-                            "valid": True,
-                            "deprecations": result.deprecations.get(s.name, []),
-                        }
-                        for s in result.syncs
-                    ]
-                    + [
-                        {"name": name, "valid": False, "errors": errs}
-                        for name, errs in result.errors.items()
-                    ],
-                },
+                {"results": results_json},
                 indent=2,
             )
         )
@@ -795,6 +799,15 @@ def validate(
                 if deprecation["docs_link"]:
                     console.print(f"       See {deprecation['docs_link']}")
 
+        if check_connection:
+            from drt.cli.output import print_connection_test_result
+            conn_res = _run_connection_test(sync)
+            print_connection_test_result(
+                sync.name,
+                success=conn_res["success"],
+                error=conn_res["error"],
+            )
+
     for name, errors in result.errors.items():
         print_validation_error(name, errors)
 
@@ -807,6 +820,46 @@ def validate(
         console.print(f"\n[dim]Schemas written to {schema_dir}/[/dim]")
         for p in written:
             console.print(f"  {p}")
+
+
+def _run_connection_test(sync: SyncConfig) -> dict[str, Any]:
+    """Internal helper to test connectivity for a sync's destination."""
+    from drt.config.models import (
+        ClickHouseDestinationConfig,
+        MySQLDestinationConfig,
+        PostgresDestinationConfig,
+        SnowflakeDestinationConfig,
+    )
+    from drt.connectors.registry import get_destination
+
+    dest_config = sync.destination
+    is_sql = isinstance(
+        dest_config,
+        (
+            PostgresDestinationConfig,
+            MySQLDestinationConfig,
+            ClickHouseDestinationConfig,
+            SnowflakeDestinationConfig,
+        ),
+    )
+
+    if not is_sql:
+        return {"success": None, "error": None, "skipped": True}
+
+    try:
+        dest = get_destination(dest_config)
+        tester = getattr(dest, "test_connection", None)
+        if callable(tester):
+            tester(dest_config)
+            return {"success": True, "error": None, "skipped": False}
+        else:
+            return {
+                "success": False,
+                "error": "test_connection method missing",
+                "skipped": False,
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e), "skipped": False}
 
 
 # ---------------------------------------------------------------------------

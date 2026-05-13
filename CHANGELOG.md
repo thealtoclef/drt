@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+- **Connection test in `drt validate`** (#367): Added `--check-connection` flag to test connectivity to SQL destinations (PostgreSQL, MySQL, ClickHouse, Snowflake) before running syncs. Reports pass/fail per sync; non-SQL destinations are skipped gracefully.
+- **Deprecation warnings in `drt validate`** (#478, closes #467): The `validate` command now reads `drt/deprecations.py` and surfaces ⚠️ warnings for any deprecated config keys it finds in your sync YAMLs — both in text output and as a per-sync `deprecations` array under `--output json`. Exit code stays `0` (warnings are non-blocking). The registry is currently empty (no active deprecations); add entries to `DEPRECATED_SYNC_KEYS` when announcing a new deprecation per VERSIONING.md Step 1. Migration guides live under `docs/migration/`. Closes the Step 2 ("Add Tooling Support") TODO from #457.
+
 ## [0.7.2] - 2026-05-11
 
 **Theme: Production Ready follow-up #2.** Opt-in anonymous telemetry, deprecation warnings in `drt validate`, Postgres `psycopg2.sql` hardening — closing out the v0.7 cycle items that didn't make v0.7.1.
@@ -76,6 +80,7 @@ None. Drop-in upgrade from v0.7.0.
 
 - **Watermark advance for tz-aware cursor values** (#475, PR #476): `drt/engine/sync.py` was calling `str()` directly on cursor field values, which for tz-aware datetimes (e.g. BigQuery `TIMESTAMP` columns from the Python BQ client) produced strings with a `+00:00` suffix. When user SQL or `default_value` was written tz-naive, the next run compared a naive `WHERE col >= TIMESTAMP('YYYY-MM-DD HH:MM:SS')` against the tz-aware persisted form and the boundary row re-fired on every run. The engine now normalizes tz-aware datetimes to naive UTC before stringifying. Reported by @K-Masuda-SL after a prod incident where a single `recording_sessions` row triggered a downstream GHA `workflow_dispatch` three times in a row.
 - **`on_error=fail` not respected by Notion / REST API / Email SMTP destinations** (#365, PR #463): three HTTP destinations continued processing the rest of the batch after the first failure even when `on_error: fail` was configured. Now all three short-circuit and `return result` on the first failure, matching the documented contract and the behavior of every other destination. New `on_error=fail` and per-destination retry override tests lock the semantic in across the webhook surface.
+
 
 ## [0.7.0] - 2026-05-06
 
